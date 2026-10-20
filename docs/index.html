@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Box Miroir</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #6b6e72; }
+  canvas { display: block; touch-action: none; }
+  #hint { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); font: 14px system-ui, sans-serif;
+          color: #fff; background: #0009; padding: 8px 14px; border-radius: 20px; pointer-events: none; white-space: nowrap; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="hint">Chargement…</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { GroundedSkybox } from 'three/addons/objects/GroundedSkybox.js';
+
+const HDRI_ROT = THREE.MathUtils.degToRad(225); // même valeur que HDRI_ROT dans box_miroir.py
+const HDRI_HEIGHT = 1.7;                         // hauteur de prise de vue de l'HDRI (m)
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.AgXToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+// Blender (x, y, z) = three (x, z, -y). Plutôt que tourner l'HDRI, on tourne la box et la caméra en sens inverse.
+const Y = new THREE.Vector3(0, 1, 0);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 500);
+camera.position.set(5.5, 1.6, 7).applyAxisAngle(Y, HDRI_ROT);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0.3, 1.2, 0).applyAxisAngle(Y, HDRI_ROT);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI / 2 - 0.05; // ne pas passer sous le sol
+controls.minDistance = 2;
+controls.maxDistance = 25;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.6;
+controls.addEventListener('start', () => (controls.autoRotate = false));
+
+const [env, gltf] = await Promise.all([
+  new RGBELoader().loadAsync('potsdamer_platz_2k.hdr'),
+  new GLTFLoader().loadAsync('box.glb'),
+]);
+env.mapping = THREE.EquirectangularReflectionMapping;
+scene.environment = env;
+
+// Fond : HDRI projeté sur un sol plat, comme dans le rendu Blender
+const sky = new GroundedSkybox(env, HDRI_HEIGHT, 100);
+sky.position.y = HDRI_HEIGHT - 0.01;
+scene.add(sky);
+
+// Miroirs nets : réflexion pure sur une cubemap 1024 (les matériaux PBR passent par PMREM, qui floute)
+const sharp = new THREE.WebGLCubeRenderTarget(1024).fromEquirectangularTexture(renderer, env);
+const mirror = new THREE.MeshBasicMaterial({ color: 0xeeeeee, envMap: sharp.texture });
+gltf.scene.traverse((o) => {
+  if (o.material?.name === 'Miroir') o.material = mirror;
+});
+gltf.scene.rotation.y = HDRI_ROT;
+scene.add(gltf.scene);
+document.getElementById('hint').textContent = 'Glisser pour tourner · molette / pincer pour zoomer';
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
