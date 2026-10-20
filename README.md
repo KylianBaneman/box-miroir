@@ -10,7 +10,7 @@ Box habillée de miroirs avec une porte de bateau (hublot et volant en laiton), 
 
 - `box_miroir.py` — script Blender qui génère la scène (dimensions réglables en haut du fichier)
 - `box_miroir.blend` — la scène Blender
-- `docs/` — la visionneuse web (three.js) : `index.html`, `box.glb`, HDRI
+- `docs/` — la visionneuse web (three.js) : `index.html` (page blanche), `box-viewer.js` (la 3D, montée dans `#box-viewer`), `box.glb`, HDRI pour les reflets
 
 ## Régénérer la scène
 
